@@ -3,16 +3,6 @@
 ### Lession 2: Introduction to Python (2)
 
 Goal: Rewrite the data models of thisthisrice using OO approach
-Things to implement:
-1. Define the objects
-    - Dish
-    - Ricebox
-2. Create instances with CSV data
-3. Define the required functions
-4. Add type hints
-5. Introducing Pydantic
-6. Data validation - e.g. no. of dishes
-7.  
 """
 # 匯入模組
 import re
@@ -89,7 +79,7 @@ if(weekday not in ['1','2','3','4','5']):
 print(f"星期{weekday}的菜色")
 
 weekday = int(weekday) - 1
-pprint(repr(dish_by_wday[weekday]))
+print(repr(dish_by_wday[weekday]))
 
 print("問：要選多少個餸？[2-4]")
 num_of_dish = int(input())
