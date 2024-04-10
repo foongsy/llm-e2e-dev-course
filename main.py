@@ -6,7 +6,7 @@ Goal: Rewrite the data models of thisthisrice using SQLModel and store the data 
 """
 # 匯入模組
 import re
-from typing import Annotated, List, Optional
+from typing import Annotated, List
 from annotated_types import Interval
 from pydantic import computed_field, ValidationError
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -21,7 +21,7 @@ SQLDB_PATH = 'sqlite:///' + DB_PATH
 
 # class Dish(BaseModel):
 class Dish(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str
     wday: Annotated[int, Interval(ge=0, lt=6)] 
     
@@ -32,6 +32,25 @@ class Dish(SQLModel, table=True):
             if m in self.name:
                 return(True)
         return(False)
+
+class Bento(SQLModel, table=False):
+    dishes: List[str]
+
+    def __init__(self, weekday: Annotated[int, Interval(ge=1, le=5)], dishes : List[str] = list()) -> None:
+        self.dishes: List[str] = dishes
+
+    def sellable(self) -> bool: # 檢查飯盒內容是否可售
+        """
+        合格飯盒的條件
+        1. 如無蒸魚，最少兩餸，最多4餸
+        2. 如有蒸魚，最少兩餸，最多3餸
+        3. 所有餸都在今天餐單上
+        """
+
+    @computed_field
+    def price(self) -> int:
+        pass
+
 
 class Ricebox:
     FISH_SET_KEYWORD: str = '蒸倉魚'
