@@ -13,6 +13,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy import func
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from random import randint
 
 # 定義環境及"constant"
 CSV_FILE = 'thisthisrice.csv'
@@ -44,19 +45,37 @@ class Dish(SQLModel, table=True):
 class Bento(SQLModel, table=False):
     dishes: List[str]
     menu: List[str]
+    wday: int
 
-    def __init__(self, weekday: Annotated[int, Interval(ge=1, le=5)], dishes : List[str] = list()) -> None:
+    def __init__(self, weekday: Annotated[int, Interval(ge=1, le=5)] = randint(1,5), dishes : List[str] = list()) -> None:
         # 讀取所選當日餸菜
         self.menu = []
         self.dishes = []
-        statement = select(Dish).where(Dish.wday == weekday)
+        self.wday = weekday
+        statement = select(Dish).where(Dish.wday == self.wday)
         with Session(engine) as session:
             selected_dishes = session.exec(statement)
             for d in selected_dishes:
-                self.menu.append(d)
+                self.menu.append(d.name)
         for d in dishes:
             if d in self.menu:
-                self.dishes.append(d)
+                self.dishes.append(d.name)
+
+    def change_wday(self, weekday: Annotated[int, Interval(ge=1, le=5)]) -> None:
+        self.wday = weekday
+        self.menu = []
+        statement = select(Dish).where(Dish.wday == self.wday)
+        with Session(engine) as session:
+            selected_dishes = session.exec(statement)
+            for d in selected_dishes:
+                self.menu.append(d.name)
+
+    def add_dish(self, dish: str) -> None:
+        print(dish)
+        if dish in self.menu:
+            self.dishes.append(dish)
+        else:
+            raise Exception("餸菜今日並未供應")
 
     def has_fish(self) -> bool:
         for dish in self.dishes:
@@ -79,6 +98,9 @@ class Bento(SQLModel, table=False):
             return False
         if self.has_fish() and self.num_of_dishes > MAX_NO_OF_FISH_DISHES:
             return False
+        for d in self.dishes:
+            if d not in self.menu:
+                return False
         return True
 
     @computed_field
@@ -118,17 +140,44 @@ else:
                 session.add(Dish(name=pattern.sub('', x), wday=i))
             session.commit()
 
+b = Bento()
 
 app = FastAPI()
 
 @app.get("/")
-def read_root():
+def get_root():
     return {"Greeting": "歡迎幫襯兩餸飯"}
 
-@app.get("/menu/{wday}")
-def read_item(wday: Annotated[int, Interval(ge=1, le=5)]) -> List[Dish]:
-    weekday = int(wday) - 1
-    statement = select(Dish).where(Dish.wday == weekday)
-    with Session(engine) as session:
-        dishes = session.exec(statement).all()
-    return(dishes)
+@app.get("/today")
+def get_today():
+    return b.wday
+
+@app.get("/menu")
+def get_menu() -> List[str]:
+    return b.menu
+
+@app.get("/price")
+def get_bento_price() -> int:
+    try: 
+        return b.price
+    except Exception as e:
+        return(str(e))
+
+@app.post("/today/{today}")
+def post_today(today: Annotated[int, Interval(ge=1, le=5)]) -> str:
+    try:
+        b.change_wday(today)
+    except Exception as e:
+        return(str(e))
+    
+@app.get("/dishes")
+def get_dishes() -> List[str]:
+    return b.dishes
+
+@app.post("/dishes/add/{dish}")
+def post_dishes_add(dish: str) -> str:
+    try:
+        b.add_dish(dish)
+        return 'OK'
+    except Exception as e:
+        return (str(e))
