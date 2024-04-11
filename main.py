@@ -18,6 +18,14 @@ from fastapi import FastAPI, HTTPException
 CSV_FILE = 'thisthisrice.csv'
 DB_PATH = 'rice.db'
 SQLDB_PATH = 'sqlite:///' + DB_PATH
+# 餐廳規矩
+FISH_SET_KEYWORD: str = '蒸倉魚'
+MAX_NO_OF_DISHES: int = 4
+MIN_NO_OF_DISHES: int = 2
+MAX_NO_OF_FISH_DISHES: int = 3
+BASE_PRICE: int  = 35
+PERDISH_PRICE: int = 8
+FISH_BASE_PRICE: int = 58
 
 # class Dish(BaseModel):
 class Dish(SQLModel, table=True):
@@ -35,9 +43,30 @@ class Dish(SQLModel, table=True):
 
 class Bento(SQLModel, table=False):
     dishes: List[str]
+    menu: List[str]
 
     def __init__(self, weekday: Annotated[int, Interval(ge=1, le=5)], dishes : List[str] = list()) -> None:
-        self.dishes: List[str] = dishes
+        # 讀取所選當日餸菜
+        self.menu = []
+        self.dishes = []
+        statement = select(Dish).where(Dish.wday == weekday)
+        with Session(engine) as session:
+            selected_dishes = session.exec(statement)
+            for d in selected_dishes:
+                self.menu.append(d)
+        for d in dishes:
+            if d in self.menu:
+                self.dishes.append(d)
+
+    def has_fish(self) -> bool:
+        for dish in self.dishes:
+            if FISH_SET_KEYWORD in dish:
+                return True
+        return False
+
+    @computed_field
+    def num_of_dishes(self) -> int:
+        return len(self.dishes)
 
     def sellable(self) -> bool: # 檢查飯盒內容是否可售
         """
@@ -46,26 +75,23 @@ class Bento(SQLModel, table=False):
         2. 如有蒸魚，最少兩餸，最多3餸
         3. 所有餸都在今天餐單上
         """
+        if self.num_of_dishes > MAX_NO_OF_DISHES or self.num_of_dishes < MIN_NO_OF_DISHES:
+            return False
+        if self.has_fish() and self.num_of_dishes > MAX_NO_OF_FISH_DISHES:
+            return False
+        return True
 
     @computed_field
     def price(self) -> int:
-        pass
-
-
-class Ricebox:
-    FISH_SET_KEYWORD: str = '蒸倉魚'
-    MAX_NO_OF_DISHES: int = 4
-    MAX_NO_OF_FISH_DISHES: int = 3
-    BASE_PRICE: int  = 35
-    PERDISH_PRICE: int = 8
-    FISH_BASE_PRICE: int = 58
-
-    def __init__(self) -> None:
-        self.price: int = 0
-        self.dish_count: int = 0
-
-    def add(dish: Dish):
-        pass
+        price: int = 0
+        if not self.sellable():
+            raise Exception('非法飯盒')
+        if self.has_fish():
+            return FISH_BASE_PRICE + (self.num_of_dishes-2)*PERDISH_PRICE
+        #elif not self.has_fish():
+        else:
+            return BASE_PRICE + (self.num_of_dishes-2)*PERDISH_PRICE
+                
 
 # Importing data
 if Path(DB_PATH).exists():
